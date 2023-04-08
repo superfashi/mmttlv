@@ -1,0 +1,82 @@
+cabal-version: 2.2
+
+-- This file has been generated from package.yaml by hpack version 0.35.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           tlvmmt
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/superfashi/tlvmmt#readme>
+homepage:       https://github.com/superfashi/tlvmmt#readme
+bug-reports:    https://github.com/superfashi/tlvmmt/issues
+author:         SuperFashi
+maintainer:     admin@superfashi.com
+copyright:      2023 SuperFashi
+license:        0BSD
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/superfashi/tlvmmt
+
+library
+  exposed-modules:
+      Common
+      Descriptor
+      Lib
+      Message
+      Net
+      Table
+  other-modules:
+      Paths_tlvmmt
+  autogen-modules:
+      Paths_tlvmmt
+  hs-source-dirs:
+      src
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.15 && <5
+    , binary
+    , bytestring
+    , extra
+  default-language: Haskell2010
+
+executable tlvmmt-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_tlvmmt
+  autogen-modules:
+      Paths_tlvmmt
+  hs-source-dirs:
+      app
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.15 && <5
+    , binary
+    , bytestring
+    , list-t
+    , pretty-show
+    , tlvmmt
+    , transformers
+  default-language: Haskell2010
+
+test-suite tlvmmt-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_tlvmmt
+  autogen-modules:
+      Paths_tlvmmt
+  hs-source-dirs:
+      test
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.15 && <5
+    , binary
+    , bytestring
+    , tlvmmt
+  default-language: Haskell2010

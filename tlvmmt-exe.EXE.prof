@@ -1,0 +1,109 @@
+	Sat Apr 08 16:45 2023 Time and Allocation Profiling Report  (Final)
+
+	   tlvmmt-exe.EXE +RTS -N -p -RTS
+
+	total time  =        0.00 secs   (1 ticks @ 1000 us, 16 processors)
+	total alloc =   4,122,264 bytes  (excludes profiling overheads)
+
+COST CENTRE     MODULE    SRC                          %time %alloc
+
+consumeAll      Lib       src\Lib.hs:(321,1)-(325,79)  100.0   11.9
+parseTLVPackets Main      app\Main.hs:(12,1)-(16,84)     0.0    8.4
+main            Main      app\Main.hs:(19,1)-(22,11)     0.0   14.3
+get.parseMulti  Lib       src\Lib.hs:(211,7)-(216,35)    0.0    9.4
+get             Lib       src\Lib.hs:(57,3)-(63,36)      0.0   13.3
+get             Lib       src\Lib.hs:(85,3)-(132,31)     0.0   11.1
+get             Lib       src\Lib.hs:(184,3)-(192,60)    0.0    5.2
+get             Lib       src\Lib.hs:(202,3)-(216,35)    0.0    5.6
+get             Lib       src\Lib.hs:(234,3)-(260,9)     0.0    8.5
+get             Lib       src\Lib.hs:(279,3)-(289,45)    0.0    6.0
+get             Lib       src\Lib.hs:(302,3)-(316,43)    0.0    2.5
+
+
+                                                                                                                           individual      inherited
+COST CENTRE                            MODULE                         SRC                               no.     entries  %time %alloc   %time %alloc
+
+MAIN                                   MAIN                           <built-in>                        413           0    0.0    0.1   100.0  100.0
+ CAF                                   GHC.IO.FD                      <entire-module>                   812           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.Event.Windows.ConsoleEvent <entire-module>                   779           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.Conc.POSIX                 <entire-module>                   775           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.Stack.CCS                  <entire-module>                   754           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.IO.StdHandles              <entire-module>                   735           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.IO.Handle.FD               <entire-module>                   729           0    0.0    0.8     0.0    0.8
+ CAF                                   GHC.IO.Exception               <entire-module>                   727           0    0.0    0.1     0.0    0.1
+ CAF                                   GHC.IO.Encoding.CodePage       <entire-module>                   720           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.IO.Encoding                <entire-module>                   719           0    0.0    0.0     0.0    0.0
+ CAF                                   GHC.Exception                  <entire-module>                   704           0    0.0    0.1     0.0    0.1
+ CAF                                   GHC.Conc.Sync                  <entire-module>                   701           0    0.0    0.0     0.0    0.0
+ CAF:$dIP21_r9dQ                       Lib                            <no location info>                541           0    0.0    0.0     0.0    0.0
+ CAF:$fBinaryCompressedIPPacket2       Lib                            <no location info>                571           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(279,3)-(289,45)       834           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryControlMessages2          Lib                            <no location info>                511           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(145,3)-(172,31)       839           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMFUNonTimed2              Lib                            <no location info>                504           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:73:3-66                870           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMFUTimed2                 Lib                            <no location info>                496           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(57,3)-(63,36)         866           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMMTPExtensionHeader2      Lib                            <no location info>                549           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(202,3)-(216,35)       855           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMMTPMultiExtensionHeader2 Lib                            <no location info>                546           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(184,3)-(192,60)       861           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMMTPPacket2               Lib                            <no location info>                568           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(234,3)-(260,9)        837           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryMPU2                      Lib                            <no location info>                565           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(85,3)-(132,31)        863           1    0.0    0.0     0.0    0.0
+ CAF:$fBinaryTLVPacket2                Lib                            <no location info>                575           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(302,3)-(316,43)       830           1    0.0    0.0     0.0    0.0
+ CAF:loc1_r9cE                         Lib                            <no location info>                498           0    0.0    0.0     0.0    0.0
+ CAF:loc3_r9cG                         Lib                            <no location info>                499           0    0.0    0.0     0.0    0.0
+ CAF:loc_r9cD                          Lib                            <no location info>                497           0    0.0    0.1     0.0    0.1
+ CAF:lvl3_r3V3                         Main                           <no location info>                426           0    0.0    0.0     0.0    0.0
+  parseTLVPackets                      Main                           app\Main.hs:(12,1)-(16,84)        848           0    0.0    0.0     0.0    0.0
+   get                                 Lib                            src\Lib.hs:(302,3)-(316,43)       849           0    0.0    0.0     0.0    0.0
+ CAF:lvl65_r9e8                        Lib                            <no location info>                543           0    0.0    0.0   100.0    1.4
+  consumeAll                           Lib                            src\Lib.hs:(321,1)-(325,79)       877           0  100.0    1.4   100.0    1.4
+ CAF:main1                             Main                           <no location info>                428           0    0.0    0.0     0.0    0.0
+  main                                 Main                           app\Main.hs:(19,1)-(22,11)        826           1    0.0    0.0     0.0    0.0
+ CAF:main2                             Main                           <no location info>                421           0    0.0    0.0     0.0    0.0
+  main                                 Main                           app\Main.hs:(19,1)-(22,11)        829           0    0.0    0.0     0.0    0.0
+   get                                 Lib                            src\Lib.hs:(302,3)-(316,43)       831           0    0.0    0.0     0.0    0.0
+ CAF:main5                             Main                           <no location info>                420           0    0.0    0.0     0.0    0.0
+ CAF:parseAggregatedTimedMFU_r9eH      Lib                            <no location info>                560           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(85,3)-(132,31)        872           0    0.0    0.0     0.0    0.0
+   get.parseAggregatedTimedMFU         Lib                            src\Lib.hs:(124,7)-(132,31)       873           1    0.0    0.0     0.0    0.0
+ CAF:parseMulti_r9ej                   Lib                            <no location info>                547           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(202,3)-(216,35)       857           0    0.0    0.0     0.0    0.0
+   get.parseMulti                      Lib                            src\Lib.hs:(211,7)-(216,35)       858           1    0.0    0.0     0.0    0.0
+ main                                  Main                           app\Main.hs:(19,1)-(22,11)        827           0    0.0   14.3     0.0   97.3
+  fold                                 ListT                          library\ListT.hs:(344,1)-(345,71) 842         395    0.0    0.0     0.0   83.0
+   parseTLVPackets                     Main                           app\Main.hs:(12,1)-(16,84)        844         802    0.0    8.4     0.0   82.2
+    consumeAll                         Lib                            src\Lib.hs:(321,1)-(325,79)       851        1233    0.0   10.5     0.0   71.2
+     get                               Lib                            src\Lib.hs:(57,3)-(63,36)         875           0    0.0    1.5     0.0    1.5
+     get                               Lib                            src\Lib.hs:(184,3)-(192,60)       869           0    0.0    0.1     0.0    0.1
+     get                               Lib                            src\Lib.hs:(202,3)-(216,35)       859           0    0.0    0.0     0.0   14.6
+      get.parseMulti                   Lib                            src\Lib.hs:(211,7)-(216,35)       860           0    0.0    9.4     0.0   14.6
+       get                             Lib                            src\Lib.hs:(184,3)-(192,60)       862           0    0.0    5.1     0.0    5.1
+     get                               Lib                            src\Lib.hs:(279,3)-(289,45)       852           0    0.0    6.0     0.0   44.6
+      get.extractHeader                Lib                            src\Lib.hs:(285,7)-(289,45)       853         390    0.0    0.2     0.0   38.6
+       get                             Lib                            src\Lib.hs:(234,3)-(260,9)        854           0    0.0    8.4     0.0   38.5
+        get                            Lib                            src\Lib.hs:(145,3)-(172,31)       876           0    0.0    0.1     0.0    0.1
+        get                            Lib                            src\Lib.hs:(85,3)-(132,31)        864           0    0.0   11.1     0.0   24.4
+         get.parseMFU                  Lib                            src\Lib.hs:(107,7)-(110,70)       865         384    0.0    0.0     0.0    0.0
+         get                           Lib                            src\Lib.hs:73:3-66                871           0    0.0    0.7     0.0    0.7
+         get                           Lib                            src\Lib.hs:(57,3)-(63,36)         867           0    0.0   11.8     0.0   11.8
+         get.parseAggregatedTimedMFU   Lib                            src\Lib.hs:(124,7)-(132,31)       874           0    0.0    0.7     0.0    0.7
+        get                            Lib                            src\Lib.hs:(202,3)-(216,35)       856           0    0.0    5.6     0.0    5.6
+    cons                               ListT                          library\ListT.hs:(410,1)-(411,30) 868         393    0.0    0.0     0.0    0.0
+    get                                Lib                            src\Lib.hs:(302,3)-(316,43)       850           0    0.0    2.5     0.0    2.5
+   uncons                              ListT                          library\ListT.hs:(292,1)-(293,3)  843         395    0.0    0.0     0.0    0.0
+   fold.\                              ListT                          library\ListT.hs:345:43-70        845         394    0.0    0.4     0.0    0.8
+    fold.\.\                           ListT                          library\ListT.hs:345:60-70        847         394    0.0    0.5     0.0    0.5
+    main.\                             Main                           app\Main.hs:21:26-41              846         394    0.0    0.0     0.0    0.0
+  parseTLVPackets                      Main                           app\Main.hs:(12,1)-(16,84)        828           2    0.0    0.0     0.0    0.0
+   cons                                ListT                          library\ListT.hs:(410,1)-(411,30) 841           1    0.0    0.0     0.0    0.0
+  consumeAll                           Lib                            src\Lib.hs:(321,1)-(325,79)       833           1    0.0    0.0     0.0    0.1
+   get                                 Lib                            src\Lib.hs:(279,3)-(289,45)       835           0    0.0    0.0     0.0    0.1
+    get.extractHeader                  Lib                            src\Lib.hs:(285,7)-(289,45)       836           1    0.0    0.0     0.0    0.0
+     get                               Lib                            src\Lib.hs:(234,3)-(260,9)        838           0    0.0    0.0     0.0    0.0
+      get                              Lib                            src\Lib.hs:(145,3)-(172,31)       840           0    0.0    0.0     0.0    0.0
+  get                                  Lib                            src\Lib.hs:(302,3)-(316,43)       832           0    0.0    0.0     0.0    0.0
