@@ -1,10 +1,7 @@
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NumericUnderscores #-}
-
-module Lib (TLVPacket) where
+module Lib where
 
 import Common (FragmentationIndicator, consumeAll, repeatRead)
+import Control.Monad.Extra (whenMaybe)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get
   ( Get,
@@ -26,10 +23,10 @@ data MPUFragment
   deriving (Show)
 
 data MFU
-  = NonTimed MFUNonTimed
-  | NonTimedAggregated [MFUNonTimed]
-  | Timed MFUTimed
-  | TimedAggregated [MFUTimed]
+  = MFUNonTimedType MFUNonTimed
+  | MFUNonTimedAggregatedType [MFUNonTimed]
+  | MFUTimedType MFUTimed
+  | MFUTimedAggregatedType [MFUTimed]
   deriving (Show)
 
 data MFUTimed = MFUTimed
@@ -74,29 +71,21 @@ instance Binary MPU where
   get = do
     len <- getWord16be
     byte <- getWord8
-    dnc <- getWord8
-    mpuSeqNum <- getWord32be
-    payload <- getLazyByteString $ fromIntegral $ len - 6
 
-    fragment <- case shiftR byte 4 of
-      0x00 -> return MPUFragmentMPUMetadata
-      0x01 -> return MPUFragmentMovieFragmentMetadata
-      0x02 -> MPUFragmentMFU <$> consumeAll (parseMFU (testBit byte 3) (testBit byte 0)) payload
-      _ -> fail "Invalid MPU fragmentation indicator"
-
-    return $
-      MPU
-        { fragmentationIndicator = toEnum $ fromIntegral $ shiftR byte 1 .&. 0b11,
-          divisionNumberCounter = dnc,
-          mpuSequenceNumber = mpuSeqNum,
-          mpuFragment = fragment
-        }
+    MPU (toEnum $ fromIntegral $ shiftR byte 1 .&. 0b11)
+      <$> getWord8 <*> getWord32be <*> do
+        payload <- getLazyByteString $ fromIntegral $ len - 6
+        case shiftR byte 4 of
+          0x00 -> return MPUFragmentMPUMetadata
+          0x01 -> return MPUFragmentMovieFragmentMetadata
+          0x02 -> MPUFragmentMFU <$> consumeAll (parseMFU (testBit byte 3) (testBit byte 0)) payload
+          _ -> fail "Invalid MPU fragmentation indicator"
     where
       parseMFU :: Bool -> Bool -> Get MFU -- timed flag, aggregated flag
-      parseMFU False False = NonTimed <$> get
-      parseMFU False True = NonTimedAggregated <$> parseAggregatedNonTimedMFU
-      parseMFU True False = Timed <$> get
-      parseMFU True True = TimedAggregated <$> parseAggregatedTimedMFU
+      parseMFU False False = MFUNonTimedType <$> get
+      parseMFU False True = MFUNonTimedAggregatedType <$> parseAggregatedNonTimedMFU
+      parseMFU True False = MFUTimedType <$> get
+      parseMFU True True = MFUTimedAggregatedType <$> parseAggregatedTimedMFU
 
       parseAggregatedNonTimedMFU :: Get [MFUNonTimed]
       parseAggregatedNonTimedMFU =
@@ -180,33 +169,24 @@ instance Binary MMTPPacket where
   get = do
     firstByte <- getWord8
     secondByte <- getWord8
-    pid <- getWord16be
-    dts <- getWord32be
-    psn <- getWord32be
-
-    pktct <- if testBit firstByte 5 then Just <$> getWord32be else return Nothing
-    extHdr <- if testBit firstByte 1 then Just <$> get else return Nothing
-
-    payload <- case secondByte .&. 0b11_1111 of
-      0x00 -> MMTPPayloadMPU <$> get
-      0x01 -> MMTPPayloadGenericObject <$> getRemainingLazyByteString
-      0x02 -> MMTPPayloadControlMessages <$> get
-      0x03 -> MMTPPayloadRepairSymbol <$> getRemainingLazyByteString
-      typ | typ >= 0x04 && typ <= 0x1F -> MMTPPayloadReserved typ <$> getRemainingLazyByteString
-      typ | typ >= 0x20 && typ <= 0x3F -> MMTPPayloadPrivate typ <$> getRemainingLazyByteString
-      _ -> undefined -- unreachable
-    return $
-      MMTPPacket
-        { version = shiftR firstByte 6,
-          fecType = shiftR firstByte 3 .&. 0b11,
-          rapFlag = testBit firstByte 0,
-          packetId = pid,
-          deliveryTimestamp = dts,
-          packetSequenceNumber = psn,
-          packetCounter = pktct,
-          extensionHeader = extHdr,
-          mmtpPayload = payload
-        }
+    MMTPPacket
+      (shiftR firstByte 6)
+      (shiftR firstByte 3 .&. 0b11)
+      (testBit firstByte 0)
+      <$> getWord16be
+      <*> getWord32be
+      <*> getWord32be
+      <*> whenMaybe (testBit firstByte 5) getWord32be
+      <*> whenMaybe (testBit firstByte 1) get
+      <*> ( case secondByte .&. 0b11_1111 of
+              0x00 -> MMTPPayloadMPU <$> get
+              0x01 -> MMTPPayloadGenericObject <$> getRemainingLazyByteString
+              0x02 -> MMTPPayloadControlMessages <$> get
+              0x03 -> MMTPPayloadRepairSymbol <$> getRemainingLazyByteString
+              typ | typ >= 0x04 && typ <= 0x1F -> MMTPPayloadReserved typ <$> getRemainingLazyByteString
+              typ | typ >= 0x20 && typ <= 0x3F -> MMTPPayloadPrivate typ <$> getRemainingLazyByteString
+              _ -> undefined -- unreachable
+          )
 
   put = undefined
 
@@ -227,13 +207,13 @@ data CompressedIPPacket = CompressedIPPacket
 instance Binary CompressedIPPacket where
   get = do
     firstTwo <- getWord16be
-    header <- getWord8 >>= extractHeader
-    return $ CompressedIPPacket (shiftR firstTwo 4) (fromIntegral (firstTwo .&. 0b1111)) header
+    CompressedIPPacket (shiftR firstTwo 4) (fromIntegral (firstTwo .&. 0b1111))
+      <$> (getWord8 >>= extractHeader)
     where
       extractHeader :: Word8 -> Get ContextIdentificationHeader
-      extractHeader 0x20 = return ContextIdentificationHeaderPartialIPv4UDP
-      extractHeader 0x21 = return ContextIdentificationHeaderIPv4Identifier
-      extractHeader 0x60 = return ContextIdentificationHeaderPartialIPv6UDP
+      extractHeader 0x20 = ContextIdentificationHeaderPartialIPv4UDP <$ getRemainingLazyByteString
+      extractHeader 0x21 = ContextIdentificationHeaderIPv4Identifier <$ getRemainingLazyByteString
+      extractHeader 0x60 = ContextIdentificationHeaderPartialIPv6UDP <$ getRemainingLazyByteString
       extractHeader 0x61 = ContextIdentificationNoCompressedHeader <$> get
       extractHeader _ = fail "unknown header"
 

@@ -3,7 +3,14 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: streamly-core-0.1.0@sha256:34c7c4e87b8d5e5956efd256483348d1230afb79283c93a470c6af2e21c7b625,17754
+    pantry-tree:
+      sha256: b630406e8c2d55176f27d6c2b35a64c91aef12ed7389cf08115a993ade1788b4
+      size: 10618
+  original:
+    hackage: streamly-core-0.1.0
 snapshots:
 - completed:
     sha256: a95a93bcb7132bf5f8ad3356998e223947852f57d4da63e0e145870ea90d9d18

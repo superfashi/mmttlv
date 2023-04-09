@@ -37,6 +37,10 @@ library
       Paths_tlvmmt
   hs-source-dirs:
       src
+  default-extensions:
+      BinaryLiterals
+      DuplicateRecordFields
+      NumericUnderscores
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.15 && <5
@@ -58,8 +62,9 @@ executable tlvmmt-exe
       base >=4.15 && <5
     , binary
     , bytestring
-    , list-t
+    , containers
     , pretty-show
+    , streamly-core
     , tlvmmt
     , transformers
   default-language: Haskell2010

@@ -2,7 +2,7 @@ module Message where
 
 import Common (FragmentationIndicator, consumeAll, readN, repeatRead)
 import Control.Monad (when)
-import Data.Binary (Binary (..), Word16, Word8)
+import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get
   ( Get,
     getLazyByteString,
@@ -12,8 +12,9 @@ import Data.Binary.Get
     getWord8,
     lookAhead,
   )
-import Data.Bits (Bits (testBit), shiftR)
-import Data.ByteString.Lazy (ByteString)
+import Data.Bits (Bits (testBit), shiftR, (.&.))
+import Data.ByteString.Lazy (ByteString, toStrict)
+import qualified Data.ByteString.Lazy as L (length, splitAt)
 import Debug.Trace (traceShow)
 import Table (Table)
 
@@ -36,11 +37,7 @@ data PAMessage = PAMessage
   deriving (Show)
 
 instance Binary PAMessage where
-  get = do
-    msgid <- getWord16be
-    when (msgid /= 0x0000) $ fail "Invalid PA Message message id"
-    ver <- getWord8
-    getWord32be >>= getLazyByteString . fromIntegral >>= consumeAll (parseMsg ver)
+  get = verifyMessageHeader 0x0000 getWord32be parseMsg
     where
       parseMsg :: Word8 -> Get PAMessage
       parseMsg ver = PAMessage ver <$> (getWord8 >>= readN) <*> repeatRead get
@@ -49,45 +46,48 @@ instance Binary PAMessage where
 
 data ControlMessage
   = ControlMessagePA PAMessage
-  | ControlMessageCA ByteString
+  | ControlMessageM2Section M2SectionMessage
+  | ControlMessageReserved16 Word16 Word8 ByteString
   deriving (Show)
 
 instance Binary ControlMessage where
   get = do
     msgid <- lookAhead getWord16be
-    case traceShow msgid msgid of
+    case traceShow ("msgid", msgid) msgid of
       0x0000 -> ControlMessagePA <$> get
-      -- 0x0001 -> return $ ControlMessageCA dat
-      _ -> undefined -- TODO
+      0x8000 -> ControlMessageM2Section <$> get
+      _
+        | msgid >= 0x8004 && msgid <= 0xDFFF ->
+          ControlMessageReserved16
+            <$> getWord16be
+            <*> getWord8
+            <*> (getWord16be >>= getLazyByteString . fromIntegral)
+      _ -> fail $ "Unsupported Control Message message id: " ++ show msgid
 
   put = undefined
 
 data ControlMessages = ControlMessages
   { fragmentationIndicator :: FragmentationIndicator,
     lengthInformationExtensionFlag :: Bool,
-    divisionNumberCounter :: Word8,
-    messages :: Either ControlMessage [ControlMessage]
+    fragmentCounter :: Word8,
+    messages :: Either ByteString [ByteString]
   }
   deriving (Show)
 
 instance Binary ControlMessages where
   get = do
-    byte <- getWord8
-    dnc <- getWord8
-    let lef = testBit byte 1
-    msgs <-
-      if testBit byte 0
+    fi_lef_ag <- getWord8
+    fc <- getWord8
+    let lef = testBit fi_lef_ag 1
+    ControlMessages
+      (toEnum $ fromIntegral $ shiftR fi_lef_ag 6)
+      lef
+      fc
+      <$> if testBit fi_lef_ag 0
         then Right <$> readAggregate lef
-        else Left <$> get
-    return $
-      ControlMessages
-        { fragmentationIndicator = toEnum $ fromIntegral $ shiftR byte 6,
-          lengthInformationExtensionFlag = lef,
-          divisionNumberCounter = dnc,
-          messages = msgs
-        }
+        else Left <$> getRemainingLazyByteString
     where
-      readAggregate :: Bool -> Get [ControlMessage]
+      readAggregate :: Bool -> Get [ByteString]
       readAggregate lef =
         repeatRead $
           ( if lef
@@ -95,6 +95,63 @@ instance Binary ControlMessages where
               else fromIntegral <$> getWord16be
           )
             >>= getLazyByteString
-            >>= consumeAll get
 
   put = undefined
+
+data M2SectionMessage = M2SectionMessage
+  { version :: Word8,
+    tableId :: Word8,
+    sectionSyntaxIndicator :: Bool,
+    tableIdExtension :: Word16,
+    versionNumber :: Word8,
+    currentNextIndicator :: Bool,
+    sectionNumber :: Word8,
+    lastSectionNumber :: Word8,
+    signalingData :: ByteString,
+    crc32 :: Word32
+  }
+  deriving (Show)
+
+instance Binary M2SectionMessage where
+  get = do
+    verifyMessageHeader 0x8000 getWord16be parseMsg
+    where
+      parseMsg :: Word8 -> Get M2SectionMessage
+      parseMsg ver = do
+        tid <- getWord8
+        ssi_sl <- getWord16be
+        when ((shiftR ssi_sl 12 .&. 0b111) /= 0b111) $
+          fail "incorrect internal fixed bits"
+        (getLazyByteString . fromIntegral) (ssi_sl .&. 0b0000_1111_1111_1111)
+          >>= consumeAll (parseSection ver tid (testBit ssi_sl 15))
+
+      parseSection :: Word8 -> Word8 -> Bool -> Get M2SectionMessage
+      parseSection ver tid ssi = do
+        tide <- getWord16be
+        vn_cni <- getWord8
+        when (shiftR vn_cni 6 /= 0b11) $
+          fail "incorrect internal fixed bits"
+        sn <- getWord8
+        lsn <- getWord8
+        sd_crc <- getRemainingLazyByteString
+        let (sd, crc) = L.splitAt (L.length sd_crc - 4) sd_crc
+        M2SectionMessage
+          ver
+          tid
+          ssi
+          tide
+          (shiftR vn_cni 1 .&. 0b11111)
+          (testBit vn_cni 0)
+          sn
+          lsn
+          sd
+          <$> consumeAll get crc
+
+  put = undefined
+
+verifyMessageHeader :: Integral b => Word16 -> Get b -> (Word8 -> Get a) -> Get a
+verifyMessageHeader mid lp parse = do
+  msgid <- getWord16be
+  when (msgid /= mid) $ fail "Unexpected message id"
+  ver <- getWord8
+  lp >>= getLazyByteString . fromIntegral >>= consumeAll (parse ver)

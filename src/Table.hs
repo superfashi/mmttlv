@@ -1,13 +1,9 @@
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE NumericUnderscores #-}
-
 module Table where
 
 import Common (consumeAll, readN, repeatRead)
 import Control.Monad (when)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
-import Data.Binary.Get (Get, getLazyByteString, getWord16be, getWord32be, getWord8, lookAhead)
+import Data.Binary.Get (Get, getLazyByteString, getRemainingLazyByteString, getWord16be, getWord32be, getWord8, lookAhead)
 import Data.Bits (Bits (testBit), (.&.))
 import Data.ByteString.Lazy (ByteString)
 import Descriptor (Descriptor)
@@ -23,7 +19,7 @@ instance Binary Table where
     tableId <- lookAhead getWord8
     case tableId of
       0x20 -> MPT <$> get
-      _ -> undefined
+      _ -> PLT <$ getRemainingLazyByteString
   put = undefined
 
 data MMTGeneralLocationInfo

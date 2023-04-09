@@ -37,6 +37,10 @@ ghc-options:
 
 library:
   source-dirs: src
+  default-extensions:
+  - BinaryLiterals
+  - DuplicateRecordFields
+  - NumericUnderscores
   dependencies:
   - extra
 
@@ -50,9 +54,10 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - tlvmmt
-    - list-t
+    - streamly-core
     - transformers
     - pretty-show
+    - containers
 
 tests:
   tlvmmt-test:

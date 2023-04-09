@@ -1,5 +1,3 @@
-{-# LANGUAGE BinaryLiterals #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# OPTIONS_GHC -Wno-partial-fields #-}
 
 module Descriptor where
@@ -34,7 +32,7 @@ data Descriptor
 instance Binary Descriptor where
   get = do
     tag <- lookAhead getWord16be
-    case traceShow ("tag", tag) tag of
+    case tag of
       0x0001 -> MPUTimestamp <$> get
       0x8010 -> VideoComponent <$> get
       0x8011 -> MHStreamID <$> get
@@ -92,12 +90,6 @@ instance Binary MHStreamIDDescriptor where
     verifyDescriptorHeader 0x8011 $
       MHStreamIDDescriptor <$> getWord16be
   put _ = undefined
-
-verifyDescriptorHeader :: Word16 -> Get a -> Get a
-verifyDescriptorHeader tag parse = do
-  t <- getWord16be
-  when (t /= tag) $ fail "Invalid descriptor tag"
-  getWord8 >>= getLazyByteString . fromIntegral >>= consumeAll parse
 
 data MHAudioComponentDescriptor = MHAudioComponentDescriptor
   { streamContent :: Word8,
@@ -288,3 +280,9 @@ instance Binary MHDataComponentDescriptor where
         _ -> fail "Unknown MH-data component descriptor tag"
 
   put = undefined
+
+verifyDescriptorHeader :: Word16 -> Get a -> Get a
+verifyDescriptorHeader tag parse = do
+  t <- getWord16be
+  when (t /= tag) $ fail "Unexpected descriptor tag"
+  getWord8 >>= getLazyByteString . fromIntegral >>= consumeAll parse
