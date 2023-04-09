@@ -11,7 +11,7 @@ import Net (IPv4Addr, IPv6Addr)
 
 data Table
   = MPT MMTPackageTable
-  | PLT
+  | Unknown Word8 ByteString
   deriving (Show)
 
 instance Binary Table where
@@ -19,7 +19,7 @@ instance Binary Table where
     tableId <- lookAhead getWord8
     case tableId of
       0x20 -> MPT <$> get
-      _ -> PLT <$ getRemainingLazyByteString
+      _ -> Unknown tableId <$> getRemainingLazyByteString
   put = undefined
 
 data MMTGeneralLocationInfo

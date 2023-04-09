@@ -13,7 +13,7 @@ import Data.Binary.Get
     lookAhead,
   )
 import Data.Bits (Bits (testBit), shiftR, (.&.))
-import Data.ByteString.Lazy (ByteString, toStrict)
+import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L (length, splitAt)
 import Debug.Trace (traceShow)
 import Table (Table)
@@ -107,7 +107,7 @@ data M2SectionMessage = M2SectionMessage
     currentNextIndicator :: Bool,
     sectionNumber :: Word8,
     lastSectionNumber :: Word8,
-    signalingData :: ByteString,
+    signalingData :: Table,
     crc32 :: Word32
   }
   deriving (Show)
@@ -144,8 +144,8 @@ instance Binary M2SectionMessage where
           (testBit vn_cni 0)
           sn
           lsn
-          sd
-          <$> consumeAll get crc
+          <$> consumeAll get sd
+          <*> consumeAll get crc
 
   put = undefined
 

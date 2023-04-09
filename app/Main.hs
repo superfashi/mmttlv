@@ -3,7 +3,7 @@
 module Main (main) where
 
 import Common (FragmentationIndicator (..), consumeAll)
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Data.Binary (Binary, Get, Word16, Word32, Word64, get)
 import Data.Binary.Get (runGetOrFail)
 import qualified Data.ByteString.Lazy as L (readFile)
@@ -12,58 +12,69 @@ import Data.Int (Int64)
 import qualified Data.Map as Map
 import Lib
 import Message (ControlMessage, ControlMessages (..))
-import qualified Streamly.Data.Fold as Fold
-import Streamly.Data.Stream (Stream, mapMaybe, postscan, unfoldrM)
+import Streamly.Data.Stream (Stream, mapMaybe, unfoldrM)
 import qualified Streamly.Data.Stream as S (foldr, foldrM, mapM, take, toList)
-import Streamly.Internal.Data.Pipe.Type (Pipe (Pipe), PipeState (..), Step (..))
-import Streamly.Internal.Data.Stream.StreamD.Transform (transform)
+import qualified Streamly.Internal.Data.Pipe.Type as Pipe
+import Streamly.Internal.Data.SVar.Type (adaptState)
+import Streamly.Internal.Data.Stream (Step (..), Stream (Stream))
 import Text.Show.Pretty (pPrint)
 
 data ParseState = ParseState ByteString Int64
 
 type CMState = Map.Map Word16 (Word32, ByteString)
 
-type CMPipeState = PipeState CMState (CMState, [ByteString])
-
-reassembleControlMessages :: Pipe IO (Word16, Word32, ControlMessages) ControlMessage
-reassembleControlMessages = Pipe consume produce Map.empty
+reassembleControlMessages :: MonadFail m => Stream m (Word16, Word32, ControlMessages) -> Stream m ControlMessage
+reassembleControlMessages (Stream step state) = do
+  Stream step' ([], Map.empty, state)
   where
-    produce :: (CMState, [ByteString]) -> IO (Step CMPipeState ControlMessage)
-    produce (m, []) = return $ Continue $ Consume m
-    produce (m, x : xs) = do
-      p <- consumeAll get x
-      return $ Yield p $ Produce (m, xs)
+    step' _ (x : xs, m, st) = do
+      cm <- consumeAll get x
+      return $ Yield cm (xs, m, st)
+    step' gst ([], m, st) = do
+      r <- step (adaptState gst) st
+      case r of
+        Yield a s -> do
+          res <- consume m a
+          case res of
+            Pipe.Yield a' s' -> return $ Skip (a', s', s)
+            Pipe.Continue s' -> return $ Skip ([], s', s)
+        Skip s -> return $ Skip ([], m, s)
+        Stop -> do
+          unless (Map.null m) $ fail "Unfinished fragmented messages"
+          return Stop
 
-    consume :: CMState -> (Word16, Word32, ControlMessages) -> IO (Step CMPipeState ControlMessage)
+    consume :: MonadFail m => CMState -> (Word16, Word32, ControlMessages) -> m (Pipe.Step CMState [ByteString])
     consume m (pid, pseq, ControlMessages ind _ _ msgs) =
       case ind of
-        FragmentationIndicatorUndivided -> case msgs of
-          Left bs -> return $ Continue $ Produce (m, [bs])
-          Right bs -> return $ Continue $ Produce (m, bs)
+        FragmentationIndicatorUndivided -> do
+          when (Map.member pid m) $ fail $ "Packet ID " ++ show pid ++ " already started fragmented message"
+          case msgs of
+            Left bs -> return $ Pipe.Yield [bs] m
+            Right bs -> return $ Pipe.Yield bs m
         FragmentationIndicatorDividedHead -> do
           when (Map.member pid m) $ fail $ "Packet ID " ++ show pid ++ " already started fragmented message"
           t <- extractOne msgs
-          return $ Continue $ Consume $ Map.insert pid (pseq, t) m
+          return $ Pipe.Continue $ Map.insert pid (pseq, t) m
         FragmentationIndicatorDividedBody -> do
           case Map.lookup pid m of
             Nothing -> fail $ "Packet ID " ++ show pid ++ " not started fragmented message"
             Just (s, bs) -> do
               when (s >= pseq) $ fail "Sequence number reversed"
               t <- extractOne msgs
-              return $ Continue $ Consume $ Map.insert pid (pseq, bs <> t) m
+              return $ Pipe.Continue $ Map.insert pid (pseq, bs <> t) m
         FragmentationIndicatorDividedEnd -> do
           case Map.lookup pid m of
             Nothing -> fail $ "Packet ID " ++ show pid ++ " not started fragmented message"
             Just (s, bs) -> do
               when (s >= pseq) $ fail "Sequence number reversed"
               t <- extractOne msgs
-              return $ Continue $ Produce (Map.delete pid m, [bs <> t])
+              return $ Pipe.Yield [bs <> t] $ Map.delete pid m
       where
         extractOne :: MonadFail m => Either ByteString [ByteString] -> m ByteString
         extractOne (Left bs) = return bs
         extractOne (Right _) = fail "more than one message"
 
-parseTLVPackets :: ParseState -> IO (Maybe (TLVPacket, ParseState))
+parseTLVPackets :: MonadFail m => ParseState -> m (Maybe (TLVPacket, ParseState))
 parseTLVPackets (ParseState Empty _) = return Nothing
 parseTLVPackets (ParseState bs o) = do
   case runGetOrFail get bs of
@@ -93,7 +104,7 @@ main = do
               _ -> Nothing
           )
           payloads
-      messages = transform reassembleControlMessages fragments
+      messages = reassembleControlMessages fragments
   -- (r, o) <- S.foldrM reassembleControlMessages (pure (mempty, [])) fragments
 
   _ <- S.toList $ S.mapM pPrint messages
