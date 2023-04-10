@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wno-partial-fields #-}
-
 module Descriptor where
 
 import Common (ISO639LanguageCode, consumeAll, readN, repeatRead)

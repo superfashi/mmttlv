@@ -32,7 +32,6 @@ ghc-options:
 - -Wincomplete-uni-patterns
 - -Wmissing-export-lists
 - -Wmissing-home-modules
-- -Wpartial-fields
 - -Wredundant-constraints
 
 library:
@@ -43,6 +42,7 @@ library:
   - NumericUnderscores
   dependencies:
   - extra
+  - pretty-hex
 
 executables:
   tlvmmt-exe:

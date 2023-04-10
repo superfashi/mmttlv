@@ -11,6 +11,7 @@ import Net (IPv4Addr, IPv6Addr)
 
 data Table
   = MPT MMTPackageTable
+  | PLT PackageListTable
   | Unknown Word8 ByteString
   deriving (Show)
 
@@ -19,6 +20,7 @@ instance Binary Table where
     tableId <- lookAhead getWord8
     case tableId of
       0x20 -> MPT <$> get
+      0x80 -> PLT <$> get
       _ -> Unknown tableId <$> getRemainingLazyByteString
   put = undefined
 
@@ -91,11 +93,7 @@ data MMTPackageTable = MMTPackageTable
   deriving (Show)
 
 instance Binary MMTPackageTable where
-  get = do
-    tableId <- getWord8
-    when (tableId /= 0x20) $ fail "Invalid MPT table ID"
-    ver <- getWord8
-    getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll (parseTable ver)
+  get = verifyTableHeader 0x20 parseTable
     where
       parseTable :: Word8 -> Get MMTPackageTable
       parseTable ver =
@@ -106,3 +104,86 @@ instance Binary MMTPackageTable where
           <*> (getWord8 >>= readN)
 
   put = undefined
+
+data PLTIPDeliveryLocation
+  = PLTIPDeliveryLocationType1
+      { ipv4SrcAddr :: IPv4Addr,
+        ipv4DstAddr :: IPv4Addr,
+        dstPort :: Word16
+      }
+  | PLTIPDeliveryLocationType2
+      { ipv6SrcAddr :: IPv6Addr,
+        ipv6DstAddr :: IPv6Addr,
+        dstPort :: Word16
+      }
+  | PLTIPDeliveryLocationType5
+      { url :: ByteString
+      }
+  deriving (Show)
+
+data PLTIPDelivery = PLTIPDelivery
+  { transportFileId :: Word32,
+    location :: PLTIPDeliveryLocation,
+    descriptors :: [Descriptor]
+  }
+  deriving (Show)
+
+instance Binary PLTIPDelivery where
+  get =
+    PLTIPDelivery
+      <$> getWord32be
+      <*> parseLocation
+      <*> (getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll (repeatRead get))
+    where
+      parseLocation :: Get PLTIPDeliveryLocation
+      parseLocation = do
+        typ <- getWord8
+        case typ of
+          0x01 ->
+            PLTIPDeliveryLocationType1 <$> get <*> get <*> getWord16be
+          0x02 ->
+            PLTIPDeliveryLocationType2 <$> get <*> get <*> getWord16be
+          0x05 ->
+            PLTIPDeliveryLocationType5 <$> (getWord8 >>= getLazyByteString . fromIntegral)
+          _ -> fail "Invalid PLT IP delivery location type"
+
+  put = undefined
+
+data PLTMMTPackage = PLTMMTPackage
+  { packageId :: ByteString,
+    generalLocationInfo :: MMTGeneralLocationInfo
+  }
+  deriving (Show)
+
+instance Binary PLTMMTPackage where
+  get =
+    PLTMMTPackage
+      <$> (getWord8 >>= getLazyByteString . fromIntegral)
+      <*> get
+
+  put = undefined
+
+data PackageListTable = PackageListTable
+  { version :: Word8,
+    packages :: [PLTMMTPackage],
+    ipDeliveries :: [PLTIPDelivery]
+  }
+  deriving (Show)
+
+instance Binary PackageListTable where
+  get = verifyTableHeader 0x80 parseTable
+    where
+      parseTable :: Word8 -> Get PackageListTable
+      parseTable ver = do
+        PackageListTable ver
+          <$> (getWord8 >>= readN)
+          <*> (getWord8 >>= getLazyByteString . fromIntegral >>= consumeAll (repeatRead get))
+
+  put = undefined
+
+verifyTableHeader :: Word8 -> (Word8 -> Get a) -> Get a
+verifyTableHeader t parse = do
+  tid <- getWord8
+  when (tid /= t) $ fail "Unexpected table id"
+  ver <- getWord8
+  getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll (parse ver)

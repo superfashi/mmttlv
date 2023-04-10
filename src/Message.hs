@@ -47,15 +47,21 @@ instance Binary PAMessage where
 data ControlMessage
   = ControlMessagePA PAMessage
   | ControlMessageM2Section M2SectionMessage
+  | ControlMessageCA CAMessage
+  | ControlMessageM2ShortSection M2ShortSectionMessage
+  | ControlMessageDataTransmission DataTransmissionMessage
   | ControlMessageReserved16 Word16 Word8 ByteString
   deriving (Show)
 
 instance Binary ControlMessage where
   get = do
     msgid <- lookAhead getWord16be
-    case traceShow ("msgid", msgid) msgid of
+    case msgid of
       0x0000 -> ControlMessagePA <$> get
       0x8000 -> ControlMessageM2Section <$> get
+      0x8001 -> ControlMessageCA <$> get
+      0x8002 -> ControlMessageM2ShortSection <$> get
+      0x8003 -> ControlMessageDataTransmission <$> get
       _
         | msgid >= 0x8004 && msgid <= 0xDFFF ->
           ControlMessageReserved16
@@ -113,8 +119,7 @@ data M2SectionMessage = M2SectionMessage
   deriving (Show)
 
 instance Binary M2SectionMessage where
-  get = do
-    verifyMessageHeader 0x8000 getWord16be parseMsg
+  get = verifyMessageHeader 0x8000 getWord16be parseMsg
     where
       parseMsg :: Word8 -> Get M2SectionMessage
       parseMsg ver = do
@@ -146,6 +151,100 @@ instance Binary M2SectionMessage where
           lsn
           <$> consumeAll get sd
           <*> consumeAll get crc
+
+  put = undefined
+
+data DataTransmissionMessage = DataTransmissionMessage
+  { version :: Word8,
+    tableId :: Word8,
+    sectionSyntaxIndicator :: Bool,
+    dataTransmissionSessionId :: Word8,
+    versionNumber :: Word8,
+    currentNextIndicator :: Bool,
+    sectionNumber :: Word8,
+    lastSectionNumber :: Word8,
+    signalingData :: Table,
+    crc32 :: Word32
+  }
+  deriving (Show)
+
+instance Binary DataTransmissionMessage where
+  get = verifyMessageHeader 0x8003 getWord32be parseMsg
+    where
+      parseMsg :: Word8 -> Get DataTransmissionMessage
+      parseMsg ver = do
+        tid <- getWord8
+        ssi_sl <- getWord16be
+        when ((shiftR ssi_sl 12 .&. 0b111) /= 0b111) $
+          fail "incorrect internal fixed bits"
+        (getLazyByteString . fromIntegral) (ssi_sl .&. 0b0000_1111_1111_1111)
+          >>= consumeAll (parseSection ver tid (testBit ssi_sl 15))
+
+      parseSection :: Word8 -> Word8 -> Bool -> Get DataTransmissionMessage
+      parseSection ver tid ssi = do
+        dtsid <- getWord8
+        _ <- getWord8 -- reserved_future_use
+        vn_cni <- getWord8
+        when (shiftR vn_cni 6 /= 0b11) $
+          fail "incorrect internal fixed bits"
+        sn <- getWord8
+        lsn <- getWord8
+        sd_crc <- getRemainingLazyByteString
+        let (sd, crc) = L.splitAt (L.length sd_crc - 4) sd_crc
+        DataTransmissionMessage
+          ver
+          tid
+          ssi
+          dtsid
+          (shiftR vn_cni 1 .&. 0b11111)
+          (testBit vn_cni 0)
+          sn
+          lsn
+          <$> consumeAll get sd
+          <*> consumeAll get crc
+
+  put = undefined
+
+data M2ShortSectionMessage = M2ShortSectionMessage
+  { version :: Word8,
+    tableId :: Word8,
+    sectionSyntaxIndicator :: Bool,
+    signalingData :: Table
+  }
+  deriving (Show)
+
+instance Binary M2ShortSectionMessage where
+  get = verifyMessageHeader 0x8002 getWord16be parseMsg
+    where
+      parseMsg :: Word8 -> Get M2ShortSectionMessage
+      parseMsg ver = do
+        tid <- getWord8
+        ssi_sl <- getWord16be
+        when ((shiftR ssi_sl 12 .&. 0b111) /= 0b111) $
+          fail "incorrect internal fixed bits"
+        (getLazyByteString . fromIntegral) (ssi_sl .&. 0b0000_1111_1111_1111)
+          >>= consumeAll (parseSection ver tid (testBit ssi_sl 15))
+
+      parseSection :: Word8 -> Word8 -> Bool -> Get M2ShortSectionMessage
+      parseSection ver tid ssi =
+        M2ShortSectionMessage ver tid ssi
+          <$> (getRemainingLazyByteString >>= consumeAll get)
+
+  put = undefined
+
+data CAMessage = CAMessage
+  { version :: Word8,
+    table :: Table
+  }
+  deriving (Show)
+
+instance Binary CAMessage where
+  get = verifyMessageHeader 0x8001 getWord16be parseMsg
+    where
+      parseMsg :: Word8 -> Get CAMessage
+      parseMsg ver =
+        CAMessage ver
+          <$> (getRemainingLazyByteString >>= consumeAll get)
 
   put = undefined
 

@@ -32,7 +32,7 @@ instance Binary ISO639LanguageCode where
 consumeAll :: MonadFail m => Get a -> ByteString -> m a
 consumeAll g bs = do
   case pushEndOfInput $ runGetIncremental g `pushChunks` bs of
-    Fail _ loc err -> fail $ "error at " ++ show loc ++ ": " ++ err
+    Fail _ loc err -> fail $ "error at " ++ show loc ++ ": " ++ err ++ ", parsing: " ++ show bs
     Partial _ -> fail "not enough bytes"
     -- Done _ _ a -> return a
     Done r _ a -> if B.null r then pure a else fail "unconsumed input"
