@@ -1,6 +1,7 @@
 module Lib where
 
 import Common (FragmentationIndicator, consumeAll, repeatRead)
+import Control.Monad (when)
 import Control.Monad.Extra (whenMaybe)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get
@@ -13,8 +14,13 @@ import Data.Binary.Get
     lookAhead,
   )
 import Data.Bits (shiftR, testBit, (.&.))
-import Data.ByteString.Lazy (ByteString)
+import Data.ByteString.Lazy (ByteString, toStrict)
+import qualified Data.ByteString.Lazy as L
+import Debug.Trace (traceShow)
+import Hexdump (prettyHex)
 import Message (ControlMessages)
+import Net (IPv6Addr, IPv6Header (..), NetworkTimeProtocolData, UDPHeader (..))
+import Numeric (showHex)
 
 data MPUFragment
   = MPUFragmentMPUMetadata
@@ -219,12 +225,55 @@ instance Binary CompressedIPPacket where
 
   put = undefined
 
+data IPv6Packet = IPv6Packet
+  { -- IPv6 part
+    version :: Word8,
+    trafficClass :: Word8,
+    flowLabel :: Word32,
+    hopLimit :: Word8,
+    sourceAddress :: IPv6Addr,
+    destinationAddress :: IPv6Addr,
+    -- UDP part
+    sourcePort :: Word16,
+    destinationPort :: Word16,
+    -- Payload part
+    payload :: Either ByteString NetworkTimeProtocolData
+  }
+  deriving (Show)
+
+instance Binary IPv6Packet where
+  get = do
+    ih <- get
+    when (Net.nextHeader ih /= 0x11) $ fail "IPv6Packet nextHeader is not UDP"
+    getLazyByteString (fromIntegral $ Net.payloadLength ih) >>= consumeAll (parseUdp ih)
+    where
+      parseUdp :: IPv6Header -> Get IPv6Packet
+      parseUdp
+        IPv6Header
+          { Net.version = v,
+            Net.trafficClass = tc,
+            Net.flowLabel = fl,
+            Net.hopLimit = hl,
+            Net.sourceAddress = sa,
+            Net.destinationAddress = da
+          } = do
+          UDPHeader {Net.sourcePort = sp, Net.destinationPort = dp} <- get
+          -- TODO: checksum
+          IPv6Packet v tc fl hl sa da sp dp
+            <$> (getRemainingLazyByteString >>= consumeAll (parsePayload da dp))
+
+      parsePayload :: IPv6Addr -> Word16 -> Get (Either ByteString NetworkTimeProtocolData)
+      parsePayload (_, _, _, _, _, _, _, 0x101) 123 = Right <$> get
+      parsePayload _ _ = error "somthing else"
+
+  put = undefined
+
 data TLVPacket
   = TLVPacketIPv4 ByteString
-  | TLVPacketIPv6 ByteString
+  | TLVPacketIPv6 IPv6Packet
   | TLVPacketHeaderCompressedIP CompressedIPPacket
   | TLVPacketTransmissionControlSignal ByteString
-  | TLVPacketNull ByteString
+  | TLVPacketNull Word16
   deriving (Show)
 
 instance Binary TLVPacket where
@@ -236,11 +285,13 @@ instance Binary TLVPacket where
         l <- getWord16be
         d <- getLazyByteString $ fromIntegral l
         case t of
-          0x01 -> return $ TLVPacketIPv4 d
-          0x02 -> return $ TLVPacketIPv6 d
+          0x01 -> error "TODO: IPv4"
+          0x02 -> TLVPacketIPv6 <$> consumeAll get d
           0x03 -> TLVPacketHeaderCompressedIP <$> consumeAll get d
-          0xFE -> return $ TLVPacketTransmissionControlSignal d
-          0xFF -> return $ TLVPacketNull d
+          0xFE -> error "TODO: TCS"
+          0xFF ->
+            TLVPacketNull l
+              <$ when (L.any (/= 0xFF) d) (fail "TLV Null packet is not null")
           _ -> fail "Invalid TLV packet type"
       _ -> fail "Invalid TLV packet header"
 

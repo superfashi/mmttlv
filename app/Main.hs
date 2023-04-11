@@ -14,6 +14,7 @@ import qualified Data.Map as Map
 import Data.Maybe (isJust)
 import Lib
 import Message (ControlMessage, ControlMessages (..))
+import Net (NetworkTimeProtocolData)
 import Streamly.Data.Stream (Stream, mapMaybe, unfoldrM)
 import qualified Streamly.Data.Stream as S (foldr, foldrM, mapM, take, toList)
 import qualified Streamly.Internal.Data.Pipe.Type as Pipe
@@ -30,7 +31,7 @@ data BSState = NotStarted | Skipped | Fragment ByteString
 
 type CMState = Map.Map (Word16, Word16) (Word32, BSState)
 
-reassembleControlMessages :: Stream IO (Word16, Word16, Word32, ControlMessages) -> Stream IO ControlMessage
+reassembleControlMessages :: Stream IO ((Word16, Word16), Word32, ControlMessages) -> Stream IO ControlMessage
 reassembleControlMessages (Stream step state) = do
   Stream step' ([], Map.empty, state)
   where
@@ -51,13 +52,8 @@ reassembleControlMessages (Stream step state) = do
           unless (Map.null m') $ fail $ "Unfinished fragmented messages" ++ show m'
           return Stop
 
-    consume :: CMState -> (Word16, Word16, Word32, ControlMessages) -> IO (Pipe.Step CMState [ByteString])
-    consume m (cid, pid, pseq, ControlMessages ind _ _ msgs) = case ind of
-      -- state machine
-      -- null -> [Fragment (DividedHead), Skipped (DividedBody), NotStarted (Undivided/DividedEnd)]
-      -- NotStarted -> [Fragment (DividedHead), Skipped (DividedBody), NotStarted (Undivided/DevidedEnd)]
-      -- Skipped -> [Skipped (DividedBody), NotStarted (Undivided/DevidedEnd)]
-      -- Fragment -> [Fragment (DividedBody | seq follow), Skipped (DividedBody | seq lost), NotStarted (Undivided/DividedEnd)]
+    consume :: CMState -> ((Word16, Word16), Word32, ControlMessages) -> IO (Pipe.Step CMState [ByteString])
+    consume m ((cid, pid), pseq, ControlMessages ind _ _ msgs) = case ind of
       FragmentationIndicatorUndivided -> do
         handleHead
         let m' = Map.insert (cid, pid) (pseq, NotStarted) m
@@ -137,6 +133,32 @@ parseTLVPackets (ParseState bs o) = do
     Left (_, off, err) -> fail $ "error parse at " ++ show (o + off) ++ ": " ++ err
     Right (r, off, p) -> return $ Just (p, ParseState r (o + off))
 
+extractControlMessages :: TLVPacket -> Maybe ((Word16, Word16), Word32, ControlMessages)
+extractControlMessages
+  ( TLVPacketHeaderCompressedIP
+      ( CompressedIPPacket
+          { contextId = cid,
+            contextIdentificationHeader = h
+          }
+        )
+    ) = case h of
+    ContextIdentificationNoCompressedHeader h' -> case h' of
+      ( MMTPPacket
+          { packetId = pid,
+            packetSequenceNumber = pseq,
+            mmtpPayload = MMTPPayloadControlMessages m
+          }
+        ) -> Just ((cid, pid), pseq, m)
+      _ -> Nothing
+    _ -> Nothing
+extractControlMessages _ = Nothing
+
+extractNTP :: TLVPacket -> Maybe NetworkTimeProtocolData
+extractNTP (TLVPacketIPv6 (IPv6Packet {payload = p})) = case p of
+  Right d -> Just d
+  _ -> Nothing
+extractNTP _ = Nothing
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -145,40 +167,12 @@ main = do
     x : _ -> return x
   file <- L.readFile filename
   let packets = unfoldrM parseTLVPackets (ParseState file 0)
-      headers =
-        mapMaybe
-          ( \case
-              TLVPacketHeaderCompressedIP
-                ( CompressedIPPacket
-                    { contextId = c,
-                      contextIdentificationHeader = h
-                    }
-                  ) -> Just (c, h)
-              _ -> Nothing
-          )
-          packets
-      payloads =
-        mapMaybe
-          (\case (c, ContextIdentificationNoCompressedHeader h) -> Just (c, h); _ -> Nothing)
-          headers
-      fragments =
-        mapMaybe
-          ( \case
-              ( cid,
-                MMTPPacket
-                  { packetId = pid,
-                    packetSequenceNumber = pseq,
-                    mmtpPayload = MMTPPayloadControlMessages m
-                  }
-                ) -> Just (cid, pid, pseq, m)
-              _ -> Nothing
-          )
-          payloads
-      messages = reassembleControlMessages fragments
+      messages = reassembleControlMessages $ mapMaybe extractControlMessages packets
   -- (r, o) <- S.foldrM reassembleControlMessages (pure (mempty, [])) fragments
 
   -- _ <- S.toList $ S.mapM pPrint $ (\(pid, pseq, m) -> (pid, pseq, Message.fragmentationIndicator m)) <$> fragments
-
+  len <- S.foldr (\_ c -> c + 1) (0 :: Word64) $ mapMaybe extractNTP packets
+  print len
   len <- S.foldr (\_ c -> c + 1) (0 :: Word64) messages
   print len
 
