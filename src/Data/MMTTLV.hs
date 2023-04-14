@@ -1,6 +1,5 @@
-module Lib where
+module Data.MMTTLV (module Data.MMTTLV) where
 
-import Common (FragmentationIndicator, consumeAll, repeatRead)
 import Control.Monad (guard, when)
 import Control.Monad.Extra (whenMaybe)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
@@ -14,13 +13,11 @@ import Data.Binary.Get
     lookAhead,
   )
 import Data.Bits (shiftR, testBit, (.&.))
-import Data.ByteString.Lazy (ByteString, toStrict)
+import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
-import Debug.Trace (traceShow)
-import Hexdump (prettyHex)
-import Message (ControlMessages)
-import Net (IPv6Addr, IPv6Header (..), NetworkTimeProtocolData, PartialIPv6Header, PartialUDPHeader, UDPHeader (..))
-import Numeric (showHex)
+import Data.MMTTLV.Internal (FragmentationIndicator, consumeAll, repeatRead)
+import Data.MMTTLV.Message (ControlMessages)
+import Data.MMTTLV.Net (IPv6Addr, IPv6Header (..), NetworkTimeProtocolData, PartialIPv6Header, PartialUDPHeader, UDPHeader (..))
 
 data MPUFragment
   = MPUFragmentMPUMetadata ByteString
@@ -266,7 +263,7 @@ instance Binary IPv6Packet where
 
       parsePayload :: IPv6Addr -> Word16 -> Get (Either ByteString NetworkTimeProtocolData)
       parsePayload (_, _, _, _, _, _, _, 0x101) 123 = Right <$> get
-      parsePayload _ _ = error "somthing else"
+      parsePayload _ _ = fail "Unknown IPv6 packet"
 
   put = undefined
 
@@ -287,10 +284,10 @@ instance Binary TLVPacket where
         l <- getWord16be
         d <- getLazyByteString $ fromIntegral l
         case t of
-          0x01 -> error "TODO: IPv4"
+          0x01 -> fail "TODO: IPv4"
           0x02 -> TLVPacketIPv6 <$> consumeAll get d
           0x03 -> TLVPacketHeaderCompressedIP <$> consumeAll get d
-          0xFE -> error "TODO: TCS"
+          0xFE -> fail "TODO: TCS"
           0xFF ->
             TLVPacketNull l
               <$ when (L.any (/= 0xFF) d) (fail "TLV Null packet is not null")

@@ -1,6 +1,5 @@
-module Message where
+module Data.MMTTLV.Message (module Data.MMTTLV.Message) where
 
-import Common (FragmentationIndicator, consumeAll, readN, repeatRead)
 import Control.Monad (when)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get
@@ -12,11 +11,11 @@ import Data.Binary.Get
     getWord8,
     lookAhead,
   )
-import Data.Bits (Bits (testBit), shiftR, (.&.))
+import Data.Bits (shiftR, testBit, (.&.))
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L (length, splitAt)
-import Debug.Trace (traceShow)
-import Table (Table)
+import Data.MMTTLV.Internal (FragmentationIndicator, consumeAll, readN, repeatRead)
+import Data.MMTTLV.Table (Table)
 
 data PAMessageTableInfo = PAMessageTableInfo
   { tableId :: Word8,

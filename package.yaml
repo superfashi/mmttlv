@@ -1,6 +1,6 @@
-name:                tlvmmt
+name:                mmttlv
 version:             0.1.0.0
-github:              "superfashi/tlvmmt"
+github:              "superfashi/mmttlv"
 license:             0BSD
 author:              "SuperFashi"
 maintainer:          "admin@superfashi.com"
@@ -8,7 +8,6 @@ copyright:           "2023 SuperFashi"
 
 extra-source-files:
 - README.md
-- CHANGELOG.md
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
@@ -17,7 +16,7 @@ extra-source-files:
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/superfashi/tlvmmt#readme>
+description:         Please see the README on GitHub at <https://github.com/superfashi/mmttlv#readme>
 
 dependencies:
 - base >= 4.15 && < 5
@@ -42,10 +41,9 @@ library:
   - NumericUnderscores
   dependencies:
   - extra
-  - pretty-hex
 
 executables:
-  tlvmmt-exe:
+  mmttlv-exe:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -53,14 +51,13 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - tlvmmt
+    - mmttlv
     - streamly-core
-    - transformers
     - pretty-show
     - containers
 
 tests:
-  tlvmmt-test:
+  mmttlv-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -68,4 +65,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - tlvmmt
+    - mmttlv

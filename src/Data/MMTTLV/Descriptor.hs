@@ -1,6 +1,5 @@
-module Descriptor where
+module Data.MMTTLV.Descriptor (module Data.MMTTLV.Descriptor) where
 
-import Common (ISO639LanguageCode, consumeAll, readN, repeatRead)
 import Control.Monad (when)
 import Control.Monad.Extra (whenMaybe)
 import Data.Binary (Binary (..), Word16, Word32, Word64, Word8)
@@ -16,7 +15,7 @@ import Data.Binary.Get
   )
 import Data.Bits (Bits (testBit), shiftR, (.&.))
 import Data.ByteString.Lazy (ByteString)
-import Debug.Trace (traceShow)
+import Data.MMTTLV.Internal (ISO639LanguageCode, consumeAll, readN, repeatRead)
 
 data Descriptor
   = MPUTimestamp MPUTimestampDescriptor

@@ -1,4 +1,4 @@
-module Net where
+module Data.MMTTLV.Net (module Data.MMTTLV.Net) where
 
 import Data.Binary (Binary (..), Word16, Word32, Word64, Word8)
 import Data.Binary.Get (getWord16be, getWord32be, getWord64be, getWord8)

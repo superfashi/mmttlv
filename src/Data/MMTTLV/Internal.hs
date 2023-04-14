@@ -1,4 +1,4 @@
-module Common where
+module Data.MMTTLV.Internal (module Data.MMTTLV.Internal) where
 
 import Control.Monad.Extra (ifM)
 import Data.Binary (Binary (..), Get, Word8)

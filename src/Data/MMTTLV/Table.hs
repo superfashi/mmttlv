@@ -1,13 +1,13 @@
-module Table where
+module Data.MMTTLV.Table where
 
-import Common (consumeAll, readN, repeatRead)
 import Control.Monad (when)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get (Get, getLazyByteString, getRemainingLazyByteString, getWord16be, getWord32be, getWord8, lookAhead)
 import Data.Bits (Bits (testBit), (.&.))
 import Data.ByteString.Lazy (ByteString)
-import Descriptor (Descriptor)
-import Net (IPv4Addr, IPv6Addr)
+import Data.MMTTLV.Descriptor (Descriptor)
+import Data.MMTTLV.Internal (consumeAll, readN, repeatRead)
+import Data.MMTTLV.Net (IPv4Addr, IPv6Addr)
 
 data Table
   = MPT MMTPackageTable
