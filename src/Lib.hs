@@ -1,7 +1,7 @@
 module Lib where
 
 import Common (FragmentationIndicator, consumeAll, repeatRead)
-import Control.Monad (when)
+import Control.Monad (guard, when)
 import Control.Monad.Extra (whenMaybe)
 import Data.Binary (Binary (..), Word16, Word32, Word8)
 import Data.Binary.Get
@@ -19,13 +19,14 @@ import qualified Data.ByteString.Lazy as L
 import Debug.Trace (traceShow)
 import Hexdump (prettyHex)
 import Message (ControlMessages)
-import Net (IPv6Addr, IPv6Header (..), NetworkTimeProtocolData, UDPHeader (..))
+import Net (IPv6Addr, IPv6Header (..), NetworkTimeProtocolData, PartialIPv6Header, PartialUDPHeader, UDPHeader (..))
 import Numeric (showHex)
 
 data MPUFragment
-  = MPUFragmentMPUMetadata
-  | MPUFragmentMovieFragmentMetadata
+  = MPUFragmentMPUMetadata ByteString
+  | MPUFragmentMovieFragmentMetadata ByteString
   | MPUFragmentMFU MFU
+  | MPUFragmentPrivate Word8 ByteString
   deriving (Show)
 
 data MFU
@@ -67,7 +68,7 @@ instance Binary MFUNonTimed where
 
 data MPU = MPU
   { fragmentationIndicator :: FragmentationIndicator,
-    divisionNumberCounter :: Word8,
+    fragmentCounter :: Word8,
     mpuSequenceNumber :: Word32,
     mpuFragment :: MPUFragment
   }
@@ -76,30 +77,25 @@ data MPU = MPU
 instance Binary MPU where
   get = do
     len <- getWord16be
-    byte <- getWord8
+    ft_tf_fi_af <- getWord8
 
-    MPU (toEnum $ fromIntegral $ shiftR byte 1 .&. 0b11)
+    MPU (toEnum $ fromIntegral $ shiftR ft_tf_fi_af 1 .&. 0b11)
       <$> getWord8 <*> getWord32be <*> do
-        payload <- getLazyByteString $ fromIntegral $ len - 6
-        case shiftR byte 4 of
-          0x00 -> return MPUFragmentMPUMetadata
-          0x01 -> return MPUFragmentMovieFragmentMetadata
-          0x02 -> MPUFragmentMFU <$> consumeAll (parseMFU (testBit byte 3) (testBit byte 0)) payload
-          _ -> fail "Invalid MPU fragmentation indicator"
+        p <- getLazyByteString $ fromIntegral $ len - 6
+        case shiftR ft_tf_fi_af 4 of
+          0x00 -> return $ MPUFragmentMPUMetadata p
+          0x01 -> return $ MPUFragmentMovieFragmentMetadata p
+          0x02 -> MPUFragmentMFU <$> consumeAll (parseMFU (testBit ft_tf_fi_af 3) (testBit ft_tf_fi_af 0)) p
+          ft -> return $ MPUFragmentPrivate ft p
     where
       parseMFU :: Bool -> Bool -> Get MFU -- timed flag, aggregated flag
       parseMFU False False = MFUNonTimedType <$> get
-      parseMFU False True = MFUNonTimedAggregatedType <$> parseAggregatedNonTimedMFU
+      parseMFU False True = MFUNonTimedAggregatedType <$> parseAggregated
       parseMFU True False = MFUTimedType <$> get
-      parseMFU True True = MFUTimedAggregatedType <$> parseAggregatedTimedMFU
+      parseMFU True True = MFUTimedAggregatedType <$> parseAggregated
 
-      parseAggregatedNonTimedMFU :: Get [MFUNonTimed]
-      parseAggregatedNonTimedMFU =
-        repeatRead $
-          getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll get
-
-      parseAggregatedTimedMFU :: Get [MFUTimed]
-      parseAggregatedTimedMFU =
+      parseAggregated :: Binary a => Get [a]
+      parseAggregated =
         repeatRead $
           getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll get
 
@@ -199,7 +195,7 @@ instance Binary MMTPPacket where
 data ContextIdentificationHeader
   = ContextIdentificationHeaderPartialIPv4UDP
   | ContextIdentificationHeaderIPv4Identifier
-  | ContextIdentificationHeaderPartialIPv6UDP
+  | ContextIdentificationHeaderPartialIPv6UDP PartialIPv6Header PartialUDPHeader MMTPPacket
   | ContextIdentificationNoCompressedHeader MMTPPacket
   deriving (Show)
 
@@ -219,7 +215,7 @@ instance Binary CompressedIPPacket where
       extractHeader :: Word8 -> Get ContextIdentificationHeader
       extractHeader 0x20 = ContextIdentificationHeaderPartialIPv4UDP <$ getRemainingLazyByteString
       extractHeader 0x21 = ContextIdentificationHeaderIPv4Identifier <$ getRemainingLazyByteString
-      extractHeader 0x60 = ContextIdentificationHeaderPartialIPv6UDP <$ getRemainingLazyByteString
+      extractHeader 0x60 = ContextIdentificationHeaderPartialIPv6UDP <$> get <*> get <*> get
       extractHeader 0x61 = ContextIdentificationNoCompressedHeader <$> get
       extractHeader _ = fail "unknown header"
 
@@ -244,23 +240,29 @@ data IPv6Packet = IPv6Packet
 instance Binary IPv6Packet where
   get = do
     ih <- get
-    when (Net.nextHeader ih /= 0x11) $ fail "IPv6Packet nextHeader is not UDP"
-    getLazyByteString (fromIntegral $ Net.payloadLength ih) >>= consumeAll (parseUdp ih)
+    when (nextHeader ih /= 0x11) $ fail "IPv6Packet nextHeader is not UDP"
+    getLazyByteString (fromIntegral $ payloadLength ih) >>= consumeAll (parseUdp ih)
     where
       parseUdp :: IPv6Header -> Get IPv6Packet
       parseUdp
         IPv6Header
-          { Net.version = v,
-            Net.trafficClass = tc,
-            Net.flowLabel = fl,
-            Net.hopLimit = hl,
-            Net.sourceAddress = sa,
-            Net.destinationAddress = da
+          { version = v,
+            trafficClass = tc,
+            flowLabel = fl,
+            hopLimit = hl,
+            sourceAddress = sa,
+            destinationAddress = da
           } = do
-          UDPHeader {Net.sourcePort = sp, Net.destinationPort = dp} <- get
+          UDPHeader
+            { sourcePort = sp,
+              destinationPort = dp,
+              length = l
+            } <-
+            get
+          guard $ l >= 8
           -- TODO: checksum
           IPv6Packet v tc fl hl sa da sp dp
-            <$> (getRemainingLazyByteString >>= consumeAll (parsePayload da dp))
+            <$> (getLazyByteString (fromIntegral (l - 8)) >>= consumeAll (parsePayload da dp))
 
       parsePayload :: IPv6Addr -> Word16 -> Get (Either ByteString NetworkTimeProtocolData)
       parsePayload (_, _, _, _, _, _, _, 0x101) 123 = Right <$> get
@@ -269,10 +271,10 @@ instance Binary IPv6Packet where
   put = undefined
 
 data TLVPacket
-  = TLVPacketIPv4 ByteString
+  = TLVPacketIPv4
   | TLVPacketIPv6 IPv6Packet
   | TLVPacketHeaderCompressedIP CompressedIPPacket
-  | TLVPacketTransmissionControlSignal ByteString
+  | TLVPacketTransmissionControlSignal
   | TLVPacketNull Word16
   deriving (Show)
 

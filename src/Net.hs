@@ -35,6 +35,31 @@ instance Binary IPv6Header where
 
   put = undefined
 
+data PartialIPv6Header = PartialIPv6Header
+  { version :: Word8,
+    trafficClass :: Word8,
+    flowLabel :: Word32,
+    nextHeader :: Word8,
+    hopLimit :: Word8,
+    sourceAddress :: IPv6Addr,
+    destinationAddress :: IPv6Addr
+  }
+  deriving (Show)
+
+instance Binary PartialIPv6Header where
+  get = do
+    ver_tc_fl <- getWord32be
+    PartialIPv6Header
+      (fromIntegral $ shiftR ver_tc_fl 28)
+      (fromIntegral $ shiftR ver_tc_fl 20 .&. 0b1111_1111)
+      (ver_tc_fl .&. 0b1111_1111_1111_1111_1111)
+      <$> getWord8
+      <*> getWord8
+      <*> get
+      <*> get
+
+  put = undefined
+
 data UDPHeader = UDPHeader
   { sourcePort :: Word16,
     destinationPort :: Word16,
@@ -50,6 +75,20 @@ instance Binary UDPHeader where
         <*> getWord16be
         <*> getWord16be
         <*> getWord16be
+
+  put = undefined
+
+data PartialUDPHeader = PartialUDPHeader
+  { sourcePort :: Word16,
+    destinationPort :: Word16
+  }
+  deriving (Show)
+
+instance Binary PartialUDPHeader where
+  get =
+    PartialUDPHeader
+      <$> getWord16be
+      <*> getWord16be
 
   put = undefined
 

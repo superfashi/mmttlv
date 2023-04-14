@@ -25,18 +25,35 @@ instance Binary Table where
   put = undefined
 
 data MMTGeneralLocationInfo
-  = -- packet_id
-    MMTLocationType0 Word16
-  | -- ipv4_src, ipv4_dst, dst_port, packet_id
-    MMTLocationType1 IPv4Addr IPv4Addr Word16 Word16
-  | -- ipv6_src, ipv6_dst, dst_port, packet_id
-    MMTLocationType2 IPv6Addr IPv6Addr Word16 Word16
-  | -- netword_id, MPEG_2_transport_stream_id, MPEG_2_PID
-    MMTLocationType3 Word16 Word16 Word16
-  | -- ipv6_src, ipv6_dst, dst_port, MPEG_2_PID
-    MMTLocationType4 IPv6Addr IPv6Addr Word16 Word16
-  | -- url
-    MMTLocationType5 ByteString
+  = MMTLocationType0
+      { packetId :: Word16
+      }
+  | MMTLocationType1
+      { ipv4Src :: IPv4Addr,
+        ipv4Dst :: IPv4Addr,
+        dstPort :: Word16,
+        packetId :: Word16
+      }
+  | MMTLocationType2
+      { ipv6Src :: IPv6Addr,
+        ipv6Dst :: IPv6Addr,
+        dstPort :: Word16,
+        packetId :: Word16
+      }
+  | MMTLocationType3
+      { networkId :: Word16,
+        mpeg2TransportStreamId :: Word16,
+        mpeg2Pid :: Word16
+      }
+  | MMTLocationType4
+      { ipv6Src :: IPv6Addr,
+        ipv6Dst :: IPv6Addr,
+        dstPort :: Word16,
+        mpeg2Pid :: Word16
+      }
+  | MMTLocationType5
+      { url :: ByteString
+      }
   deriving (Show)
 
 instance Binary MMTGeneralLocationInfo where
@@ -63,7 +80,7 @@ data MPTAsset = MPTAsset
   { idType :: Word8,
     assetIdScheme :: Word32,
     assetId :: ByteString,
-    assetType :: Word32,
+    assetType :: ByteString,
     assetClockRelationFlag :: Bool,
     generalLocationInfo :: [MMTGeneralLocationInfo],
     descriptors :: [Descriptor]
@@ -76,7 +93,7 @@ instance Binary MPTAsset where
       <$> getWord8
       <*> getWord32be
       <*> (getWord8 >>= getLazyByteString . fromIntegral)
-      <*> getWord32be
+      <*> getLazyByteString 4
       <*> ((`testBit` 0) <$> getWord8)
       <*> (getWord8 >>= readN)
       <*> (getWord16be >>= getLazyByteString . fromIntegral >>= consumeAll (repeatRead get))
